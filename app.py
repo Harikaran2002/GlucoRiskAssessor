@@ -17,13 +17,14 @@ st.title("🩺 Early Stage Diabetes Prediction")
 # --------------------------------------------------
 model_choice = st.selectbox(
     "Select Prediction Model",
-    ["Logistic Regression", "Decision Tree", "KNN"]
+    ["Logistic Regression", "Decision Tree", "KNN", "Naive Bayes"]
 )
 
 MODEL_PATHS = {
     "Logistic Regression": "model/logistic_model.pkl",
     "Decision Tree": "model/decision_tree_model.pkl",
-    "KNN": "model/knn_model.pkl"
+    "KNN": "model/knn_model.pkl",
+    "Naive Bayes": "model/naive_bayes_model.pkl"
 }
 
 # --------------------------------------------------
