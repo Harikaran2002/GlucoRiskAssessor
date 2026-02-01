@@ -5,21 +5,47 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
 
+# --------------------------------------------------
+# Page config
+# --------------------------------------------------
 st.set_page_config(page_title="Diabetes Prediction", layout="centered")
 
 st.title("🩺 Early Stage Diabetes Prediction")
-st.write("Logistic Regression Model")
 
-# Load trained model
-with open("model/logistic_model.pkl", "rb") as f:
-    model, scaler, feature_cols = pickle.load(f)
+# --------------------------------------------------
+# Model selection
+# --------------------------------------------------
+model_choice = st.selectbox(
+    "Select Prediction Model",
+    ["Logistic Regression", "Decision Tree"]
+)
 
+MODEL_PATHS = {
+    "Logistic Regression": "model/logistic_model.pkl",
+    "Decision Tree": "model/decision_tree_model.pkl"
+}
+
+# --------------------------------------------------
+# Load selected model (cached)
+# --------------------------------------------------
+@st.cache_resource
+def load_model(path):
+    with open(path, "rb") as f:
+        return pickle.load(f)
+
+model, scaler, feature_cols = load_model(MODEL_PATHS[model_choice])
+
+st.write(f"### Using {model_choice} Model")
+
+# --------------------------------------------------
+# Input mode selection
+# --------------------------------------------------
 input_mode = st.radio(
     "Select Input Method",
     ["Manual Entry", "Upload CSV"]
 )
 
-# ---------------- MANUAL ENTRY ---------------- #
+# ================= MANUAL ENTRY ================= #
 if input_mode == "Manual Entry":
     st.subheader("Enter Patient Details")
 
@@ -67,12 +93,14 @@ if input_mode == "Manual Entry":
         pred = model.predict(input_scaled)[0]
         prob = model.predict_proba(input_scaled)[0][1]
 
-        st.success(
-            f"Prediction: {'Diabetic' if pred == 1 else 'Not Diabetic'}"
-        )
+        if pred == 1:
+            st.error("⚠️ High Risk of Diabetes")
+        else:
+            st.success("✅ Low Risk of Diabetes")
+
         st.info(f"Probability of Diabetes: {prob:.2f}")
 
-# ---------------- CSV UPLOAD ---------------- #
+# ================= CSV UPLOAD ================= #
 else:
     uploaded_file = st.file_uploader(
         "Upload Test CSV File (semicolon separated)",
@@ -81,6 +109,7 @@ else:
 
     if uploaded_file:
         df = pd.read_csv(uploaded_file, sep=";")
+
         st.subheader("Uploaded Data Preview")
         st.dataframe(df)
 
