@@ -3,20 +3,50 @@ import pandas as pd
 import pickle
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import confusion_matrix, classification_report
+
+from sklearn.metrics import (
+    accuracy_score,
+    roc_auc_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    matthews_corrcoef,
+    confusion_matrix,
+    classification_report
+)
 
 # --------------------------------------------------
-# Page config
+# Page Config
 # --------------------------------------------------
-st.set_page_config(page_title="Diabetes Prediction", layout="centered")
+st.set_page_config(
+    page_title="Diabetes Risk Prediction",
+    layout="wide"
+)
 
-st.title("🩺 Early Stage Diabetes Prediction")
+# --------------------------------------------------
+# Header
+# --------------------------------------------------
+st.markdown(
+    """
+    <div style="text-align:center;">
+        <h1>🩺 Early Stage Diabetes Risk Prediction</h1>
+        <p style="font-size:18px;">
+        Machine Learning–based clinical decision support system
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown("---")
 
 # --------------------------------------------------
-# Model selection
+# Model Selection
 # --------------------------------------------------
+st.subheader("Model Selection")
+
 model_choice = st.selectbox(
-    "Select Prediction Model",
+    "Choose a trained prediction model",
     [
         "Logistic Regression",
         "Decision Tree",
@@ -37,7 +67,7 @@ MODEL_PATHS = {
 }
 
 # --------------------------------------------------
-# Load selected model (cached)
+# Load Model (Cached)
 # --------------------------------------------------
 @st.cache_resource
 def load_model(path):
@@ -46,19 +76,157 @@ def load_model(path):
 
 model, scaler, feature_cols = load_model(MODEL_PATHS[model_choice])
 
-st.write(f"### Using {model_choice} Model")
+st.success(f"Using **{model_choice}** model")
+
+st.markdown("---")
 
 # --------------------------------------------------
-# Input mode selection
+# Input Method
 # --------------------------------------------------
+st.subheader("Input Method")
+
 input_mode = st.radio(
-    "Select Input Method",
-    ["Manual Entry", "Upload CSV"]
+    "Select how you want to provide patient data",
+    ["Upload CSV (Test Data)", "Manual Entry"],
+    horizontal=True
 )
 
-# ================= MANUAL ENTRY ================= #
-if input_mode == "Manual Entry":
-    st.subheader("Enter Patient Details")
+# --------------------------------------------------
+# CSV UPLOAD (PROFESSIONAL FIRST)
+# --------------------------------------------------
+if input_mode == "Upload CSV (Test Data)":
+
+    st.subheader("Upload Test Dataset")
+
+    # Sample test data
+    sample_df = pd.read_csv("data/diabetes_test.csv", sep=";")
+
+    st.download_button(
+        label="⬇Download Sample Test Data",
+        data=sample_df.to_csv(index=False, sep=";"),
+        file_name="sample_diabetes_test_data.csv",
+        mime="text/csv"
+    )
+
+    uploaded_file = st.file_uploader(
+        "Upload CSV file (semicolon separated)",
+        type=["csv"]
+    )
+
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file, sep=";")
+
+        st.subheader("Uploaded Data Preview")
+        st.dataframe(df, use_container_width=True)
+
+        if "class" in df.columns:
+            y_true = df["class"]
+            X = df.drop("class", axis=1)
+        else:
+            X = df
+            y_true = None
+
+        X = pd.get_dummies(X, drop_first=True)
+        X = X.reindex(columns=feature_cols, fill_value=0)
+        X_scaled = scaler.transform(X)
+
+        y_pred = model.predict(X_scaled)
+        y_prob = model.predict_proba(X_scaled)[:, 1]
+
+        df["Prediction"] = y_pred
+        df["Probability"] = y_prob
+
+        st.markdown("---")
+        st.subheader("Prediction Results")
+        st.dataframe(df, use_container_width=True)
+
+       # ---------------- METRICS ---------------- #
+        st.markdown("---")
+        st.subheader("Model Evaluation")
+
+        if "class" not in df.columns:
+            st.info(
+                "Evaluation metrics and confusion matrix require ground-truth labels. "
+                "Please upload a labeled test dataset containing the `class` column."
+            )
+        else:
+            # Ground truth and predictions
+            y_true = df["class"].astype(int)
+            y_pred = df["Prediction"].astype(int)
+            y_prob = df["Probability"]
+
+            # ---------------- ROW 1: METRICS + CONFUSION MATRIX ---------------- #
+            left_col, right_col = st.columns([1.3, 1])
+
+            with left_col:
+                st.markdown("Evaluation Metrics")
+
+                # Exact order as per assignment
+                st.metric("1. Accuracy", f"{accuracy_score(y_true, y_pred):.4f}")
+                st.metric("2. AUC Score", f"{roc_auc_score(y_true, y_prob):.4f}")
+                st.metric("3. Precision", f"{precision_score(y_true, y_pred):.4f}")
+                st.metric("4. Recall", f"{recall_score(y_true, y_pred):.4f}")
+                st.metric("5. F1 Score", f"{f1_score(y_true, y_pred):.4f}")
+                st.metric(
+                    "6. Matthews Correlation Coefficient (MCC)",
+                    f"{matthews_corrcoef(y_true, y_pred):.4f}"
+                )
+
+            with right_col:
+                st.markdown("Confusion Matrix")
+
+                cm = confusion_matrix(y_true, y_pred)
+                fig, ax = plt.subplots(figsize=(4, 4))
+                sns.heatmap(
+                    cm,
+                    annot=True,
+                    fmt="d",
+                    cmap="Blues",
+                    cbar=False,
+                    ax=ax
+                )
+                ax.set_xlabel("Predicted Label")
+                ax.set_ylabel("True Label")
+                st.pyplot(fig)
+
+         # ---------------- CLASSIFICATION REPORT (PROFESSIONAL TABLE) ---------------- #
+        st.markdown("---")
+        st.subheader("Classification Report")
+
+        # Generate report as dictionary
+        report = classification_report(
+            y_true,
+            y_pred,
+            output_dict=True
+        )
+
+        # Convert to DataFrame
+        report_df = pd.DataFrame(report).transpose().round(3)
+
+        # Rename index for clarity
+        report_df.rename(
+            index={
+                "0": "Class 0 (Non-Diabetic)",
+                "1": "Class 1 (Diabetic)",
+                "accuracy": "Overall Accuracy",
+                "macro avg": "Macro Average",
+                "weighted avg": "Weighted Average"
+            },
+            inplace=True
+        )
+
+        # Display table
+        st.dataframe(
+            report_df,
+            use_container_width=True
+        )
+
+# --------------------------------------------------
+# MANUAL ENTRY
+# --------------------------------------------------
+else:
+    st.subheader("Manual Patient Data Entry")
+    st.info("Manual entry is intended for individual patient prediction.")
 
     age = st.number_input("Age", 1, 120, 40)
     gender = st.selectbox("Gender", ["Male", "Female"])
@@ -77,7 +245,7 @@ if input_mode == "Manual Entry":
     alopecia = st.selectbox("Alopecia", [0, 1])
     obesity = st.selectbox("Obesity", [0, 1])
 
-    if st.button("Predict"):
+    if st.button("🔍 Predict Diabetes Risk"):
         input_data = pd.DataFrame([{
             "age": age,
             "gender": gender,
@@ -104,53 +272,10 @@ if input_mode == "Manual Entry":
         pred = model.predict(input_scaled)[0]
         prob = model.predict_proba(input_scaled)[0][1]
 
+        st.markdown("---")
         if pred == 1:
-            st.error("⚠️ High Risk of Diabetes")
+            st.error("High Risk of Diabetes Detected")
         else:
-            st.success("✅ Low Risk of Diabetes")
+            st.success("Low Risk of Diabetes")
 
-        st.info(f"Probability of Diabetes: {prob:.2f}")
-
-# ================= CSV UPLOAD ================= #
-else:
-    uploaded_file = st.file_uploader(
-        "Upload Test CSV File (semicolon separated)",
-        type=["csv"]
-    )
-
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file, sep=";")
-
-        st.subheader("Uploaded Data Preview")
-        st.dataframe(df)
-
-        if "class" in df.columns:
-            y_true = df["class"]
-            X = df.drop("class", axis=1)
-        else:
-            X = df
-            y_true = None
-
-        X = pd.get_dummies(X, drop_first=True)
-        X = X.reindex(columns=feature_cols, fill_value=0)
-        X_scaled = scaler.transform(X)
-
-        y_pred = model.predict(X_scaled)
-        y_prob = model.predict_proba(X_scaled)[:, 1]
-
-        df["Prediction"] = y_pred
-        df["Probability"] = y_prob
-
-        st.subheader("Prediction Results")
-        st.dataframe(df)
-
-        if y_true is not None:
-            st.subheader("Classification Report")
-            st.text(classification_report(y_true, y_pred))
-
-            st.subheader("Confusion Matrix")
-            cm = confusion_matrix(y_true, y_pred)
-
-            fig, ax = plt.subplots()
-            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
-            st.pyplot(fig)
+        st.metric("Probability of Diabetes", f"{prob:.2f}")
