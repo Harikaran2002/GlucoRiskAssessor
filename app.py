@@ -63,7 +63,7 @@ MODEL_PATHS = {
     "KNN": "model/knn_model.pkl",
     "Naive Bayes": "model/naive_bayes_model.pkl",
     "Random Forest": "model/random_forest_model.pkl",
-    "XGBoost": "model/xgboost_model.pkl"
+    "XGBoost": "model/xgBoost_model.pkl"
 }
 
 # --------------------------------------------------
